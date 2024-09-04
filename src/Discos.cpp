@@ -79,8 +79,8 @@ int main(int argc, char *argv[]){
     Colisionador Col;
 
     //lector 
-    //std::string input = argv[1];
-    std::string input = "0"; //! Solo para pruebas en debuggin
+    std::string input = argv[1];
+    //std::string input = "0"; //! Solo para pruebas en debuggin
     int gnu = stringToBool(input);
 
     //Constantes iniciales
@@ -217,12 +217,12 @@ void InicieAnimacion(const std::string& str)
     cout << "set terminal gif animate" << endl;
     cout << "set output '"<< str <<"'" << endl;
     cout << "unset key" << endl;
-    cout << "set xrange[-5:5]" << endl;
-    cout << "set yrange[-5:5]" << endl;
-    cout << "set size ratio -1" << endl;
-    cout << "set parametric" << endl;
-    cout << "set trange [0:7]" << endl;
-    cout << "set isosamples 12" << endl;
+    cout<<"set xrange["<<-Lx-10<<":"<<Lx+10<<"]"<<endl;
+    cout<<"set yrange["<<-Ly-10<<":"<<Ly+10<<"]"<<endl;
+    cout<<"set size ratio -1"<<endl;
+    cout<<"set parametric"<<endl;
+    cout<<"set trange [0:7]"<<endl;
+    cout<<"set isosamples 12"<<endl;  
 }
 void InicieCuadro(void){
     cout<<"plot 0,0 ";
