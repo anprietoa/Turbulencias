@@ -23,6 +23,8 @@ const double Cd = 0.47; // Coeficiente de arrastre (esfera)
 const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
 const double KH=1e4; //Constante de Hertz
+const double Kcundall = 500; //Constante de Cundall
+const double mu = 0.4 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.4 por ahora
 
 //* ------------------------------ Declaraion de clases, metodos de clases y funciones globales ------------------------------
 
@@ -56,10 +58,11 @@ class Cuerpo{
 //------------  Declaraion de la clase Colisionador  ----------------
 class Colisionador{
     private:
-        
+        double xCundall[N+1][N+1], sold[N+1][N+1];
     public:
+        void Inicie(void);
         void CalculeAllF(Cuerpo*Particulas);
-        void CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2);
+        void CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, double &xCundall, double &sold, double dt);
         void CalculeF_pared(Cuerpo & Particula1,Cuerpo & pared);
         void CalculeF_magnus(Cuerpo & Particula);
 };
@@ -157,6 +160,17 @@ void Cuerpo::Dibujese(void){
 
 //----------  Implementar funciones de la clase Colisionador  --------------
 
+void Colisionador::Inicie(void)
+{
+    for (int i = 0; i < N+1; i++)
+    {
+        for (int j = 0; j < N+1; j++)
+        {
+        xCundall[i][j] = sold[i][j] = 0;
+        }
+    }
+}
+
 void Colisionador::CalculeAllF(Cuerpo*Particulas){
     int i,j;
     //Borrar la fuerza de todas los Particulas
@@ -170,7 +184,7 @@ void Colisionador::CalculeAllF(Cuerpo*Particulas){
     //Calcular Fuerza entre colisiones de las partículas
     for(i=0;i<N;i++){
         for(j=i+1;j<N;j++){
-            CalculeF_colision(Particulas[i],Particulas[j]);
+            CalculeF_colision(Particulas[i],Particulas[j], xCundall[i][j], sold[i][j], dt);
         } 
     }
     //Calcular Fuerza entre cada partícula y la pared
@@ -179,18 +193,45 @@ void Colisionador::CalculeAllF(Cuerpo*Particulas){
     }
 }
 
-void Colisionador::CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2){
+void Colisionador::CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, double &xCundall, double &sold, double dt){
     //Determinar si hay colisión
     vector3D r21=Particula2.r-Particula1.r;
     double rn=r21.norm();
     double R1=Particula1.R, R2=Particula2.R; 
     double s=(R1+R2)-rn;
     if(s>0){//Si hay colisión
+
         //Calcular el vector normal
-        vector3D n=r21*(1/rn);
-        //Calcular fuerza
-        vector3D F=n*(KH*pow(s,1.5));
-        Particula2.SumeFuerza(F); Particula1.SumeFuerza(-1*F);
+        vector3D n = r21 / rn, t, k;
+        t.load(n.y(), -n.x(), 0);
+        k.load(0, 0, 1);
+
+        //Calcular fuerza Herzt
+        double Fn=KH*pow(s,1.5);
+
+        // calculo de velocidades de contacto
+        vector3D Rw;
+        //Rw.load(0, 0, R2 * Particula2.omega + R1 * Particula1.omega); //TODO: Agregar esto cuando se implemente la rotación
+        vector3D Vc = (Particula2.V - Particula2.V); //TODO: Agregar  - (Rw ^ n)
+        double Vcn = Vc * n, Vct = Vc * t;
+
+        // calculo fuerza tangencial (Cundall)
+        xCundall += Vct * dt;
+        double Ft = -Kcundall * xCundall;
+        double Ftmax = mu * fabs(Fn);
+        if (fabs(Ft) > Ftmax)
+        {
+        Ft = Ftmax * Ft / fabs(Ft);
+        }
+
+        // calcular y cargar fuerzas
+        vector3D F1, F2, tau1, tau2;
+        F2 = n * Fn + t * Ft; 
+        //tau2 = ((n * (-R2)) ^ F2); //TODO: agregar cuando se implemente la rotación
+        F1 = F2 * -1;
+        //tau1 = ((n * R1) ^ F1); //TODO: agregar cuando se implemente la rotación
+
+        Particula2.SumeFuerza(F2); Particula1.SumeFuerza(F1);
     };
 }
 
