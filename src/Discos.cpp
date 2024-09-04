@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cmath>
+#include  <fstream>
 #include "vector.h"
 #include "Random64.h"
 using namespace std;
@@ -33,14 +34,13 @@ class Colisionador;
 class Cuerpo{
     private:
      vector3D r, V, w, F;   //Vectores posición, velocidad, velocidad ángular y fuerza
-     double m, R, omega; // Masa, radio y velocidad ángular
-     double A =2*R; // Longitud característica del disco
+     double m, R; // Masa, radio y velocidad ángular
+     double A; // Longitud característica del disco
 
     public:
         void Inicie(double x0, double y0, double vx0, double vy0, double omega0, double m0, double R0);
         void BorreFuerza(void){F.load(0,0,0);};
         void SumeFuerza(vector3D dF){F+=dF;};
-        void CalculeFuerza(void);
         void Muevase(double dt, double kT, Crandom & ran64);
         void Arranque(double dt);
         double Get_x(void){return r.x();};
@@ -69,8 +69,8 @@ class Colisionador{
 void InicieAnimacion(const std::string& str); // Inicia la animacion en gnuplot
 void InicieCuadro(void); // Inicia un cuadro en gnuplot
 void TermineCuadro(void); // Termina un cuadro en gnuplot
-bool stringToBool(const std::string& str); // Convierte un string a un booleano
-void Imprimase(double t, Cuerpo *Polen, bool gnuplot); // Imprime los datos de las particulas en un tiempo t tanto para gnuplot como datos crudos
+int stringToBool(std::string str); // Convierte un string a un booleano
+void Imprimase(double t, Cuerpo *Polen, int gnuplot); // Imprime los datos de las particulas en un tiempo t tanto para gnuplot como datos crudos
 
 //----------------------------------   Programa principal   -------------------------------
 
@@ -79,8 +79,9 @@ int main(int argc, char *argv[]){
     Colisionador Col;
 
     //lector 
-    std::string input = argv[1];
-    bool gnu = stringToBool(input);
+    //std::string input = argv[1];
+    std::string input = "0"; //! Solo para pruebas en debuggin
+    int gnu = stringToBool(input);
 
     //Constantes iniciales
     double KT = 4.0;
@@ -99,17 +100,16 @@ int main(int argc, char *argv[]){
 
     //Iniciar los cuerpos
     double theta, x0, y0;
-    for(int ix=0;ix<Nx;ix++){
-        for(int iy=0;iy<Ny;iy++){
+    for(int iy=0;iy<Ny;iy++){
+        for(int ix=0;ix<Nx;ix++){
             theta=2*M_PI*ran64.r();
             x0=(ix-2)*dx; y0=(iy-2)*dy; 
             //------------------------(x0, y0, Vx0, Vy0,  w0,  m0, R0)
-            Particula[iy*Nx+ix].Inicie(x0, y0, 0, 0.0, omega0, m0, R0);
+            Particula[iy*Nx+ix].Inicie(x0, y0, 0.0, 0.0, omega0, m0, R0);
 
         } 
     }
 
-    //for(i=0;i<N;i++) Particula[i].CalculeFuerza();
     Col.CalculeAllF(Particula); 
     for(i=0;i<N;i++) Particula[i].Arranque(dt);
 
@@ -121,7 +121,6 @@ int main(int argc, char *argv[]){
             tdibujo = 0;
         }
     
-        //for(i=0;i<N;i++) Particula[i].CalculeFuerza();
         Col.CalculeAllF(Particula); 
         for(i=0;i<N;i++) Particula[i].Muevase(dt,KT,ran64);
     }
@@ -132,24 +131,10 @@ int main(int argc, char *argv[]){
 
 void Cuerpo::Inicie(double x0, double y0, double vx0, double vy0, double omega0, double m0, double R0){
     // inicializa vectores posición y velocidad
-    r.load(x0, y0, 0.0); V.load(vx0, vy0, 0.0);
+    r.load(x0, y0, 0.0); V.load(vx0, vy0, 0.0); w.load(0, 0, omega0);
     // inicializa variables
-    m=m0; R=R0; omega=omega0;
-}
-
-void Cuerpo::CalculeFuerza(void){
-    //Declarar velocidad ángular
-    vector3D w;
-    w.load(0, 0, omega);
-
-    F.load(0, 0, 0); // borrar fuerza 
-
-    // Agrergar fuerzas
-
-    vector3D Fm = -0.5 * Cd * rho * A * R * (w ^ V); // Fuerza de Magnus
-
-    // Sumando las fuerzas
-    F += Fm;
+    m=m0; R=R0;
+    A = 2*R;
 }
 
 void Cuerpo::Muevase(double dt, double kT, Crandom & ran64){
@@ -247,25 +232,57 @@ void TermineCuadro(void){
     cout<<endl;
 }
 
-bool stringToBool(const std::string& str) 
+int stringToBool(std::string str) 
 {
-    return (str == "true" || str == "1");
+    if (str == "False" || str == "0")
+    {
+        return 0;
+    }
+
+    else if (str == "true" || str == "1")
+    {
+        return 1;
+    }
+
+    else if (str == "Both" || str == "2")
+    {
+        return 2;
+    }
+    return 0;
 }
 
-void Imprimase(double t, Cuerpo *Polen, bool gnuplot) 
+void Imprimase(double t, Cuerpo *Polen, int gnuplot) 
 {
-    if (gnuplot) 
+    if ( gnuplot > 2 || gnuplot < 0)
     {
-        if (t == 0) InicieAnimacion("fcen.gif"); //! Cambiar nombre del gif cuando se vaya a ejecutar
-        InicieCuadro();
-        for (int i = 0; i < N; i++) Polen[i].Dibujese();
-        TermineCuadro();
+        gnuplot = 0;
     }
-    else
+    switch (gnuplot)
     {
-        for (int i = 0; i < N; i++) 
-        {
-            cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << endl;
-        }
+        case 0:
+            for (int i = 0; i < N; i++) 
+            {
+                cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << endl;
+            }
+            break;
+        case 1:
+            if (t == 0) InicieAnimacion("mdisc.gif");
+            InicieCuadro();
+            for (int i = 0; i < N; i++) Polen[i].Dibujese();
+            TermineCuadro();
+            break;
+        case 2:
+            if (t == 0) InicieAnimacion("mdisc.gif");
+            InicieCuadro();
+            for (int i = 0; i < N; i++) Polen[i].Dibujese();
+            TermineCuadro();
+
+            std::ofstream MyFile("mdisc.dat", std::ios::app);
+            for (int i = 0; i < N; i++) 
+            {
+                MyFile << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << endl;
+            }
+            MyFile.close();
+            break;
     }
 }

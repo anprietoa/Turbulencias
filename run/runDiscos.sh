@@ -1,6 +1,5 @@
 g++ -g -O3 ../src/Discos.cpp
-./a.out 1 > mdisc.g
-./a.out 0 > mdisc.dat
+./a.out 2 > mdisc.g
 
 gnuplot mdisc.g
 
