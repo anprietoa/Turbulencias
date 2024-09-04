@@ -16,7 +16,7 @@ const double alpha = 1 - exp(-Gamma * dt);
 
 const int Nx=5, Ny=5; //Número de Particulas (cuadrícula)
 const int N=Nx*Ny;
-const double Lx=Nx*10,Ly=Ny*10, dx=Lx/Nx, dy=Ly/Ny;
+const double Lx=Nx*3,Ly=Ny*3, dx=Lx/Nx, dy=Ly/Ny;
 
 // Constantes para fuerzas
 const double Cd = 0.47; // Coeficiente de arrastre (esfera)
@@ -24,7 +24,8 @@ const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
 const double KH=1e4; //Constante de Hertz
 const double Kcundall = 500; //Constante de Cundall
-const double mu = 0.4 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.4 por ahora
+const double mu = 0.1 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.4 por ahora
+const double K = 1.0; // Constante de resorte
 
 //* ------------------------------ Declaraion de clases, metodos de clases y funciones globales ------------------------------
 
@@ -65,6 +66,7 @@ class Colisionador{
         void CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, double &xCundall, double &sold, double dt);
         void CalculeF_pared(Cuerpo & Particula1,Cuerpo & pared);
         void CalculeF_magnus(Cuerpo & Particula);
+        void CalculeF_ceentral(Cuerpo & Particula);
 };
 
 // Declaracion de funciones globales
@@ -90,7 +92,7 @@ int main(int argc, char *argv[]){
     double KT = 4.0;
     double m0 = 1.0;
     double R0 = 1.0;
-    double omega0 = 100.0;
+    double omega0 = -100.0;
 
     //Variable auxiliares para la animación
     int i, Ncuadros=500; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
@@ -98,7 +100,7 @@ int main(int argc, char *argv[]){
     //Iniciar pared
     Cuerpo Particula[N+1];
 
-    double Rpared=50*R0, Mpared=10*R0;
+    double Rpared=10*R0, Mpared=50*R0;
     Particula[N].Inicie(0,0,0,0,0,Mpared,Rpared); //pared circular
 
     //Iniciar los cuerpos
@@ -177,19 +179,17 @@ void Colisionador::CalculeAllF(Cuerpo*Particulas){
     for(i=0;i<N;i++){
         Particulas[i].BorreFuerza();
     };
-    //Calcular fuerza de magus para cada partícula
+    //Calcular fuerza de magus, fuerza central y fuerza contra la pared para cada partícula
     for(i=0;i<N;i++){
         CalculeF_magnus(Particulas[i]);
+        CalculeF_ceentral(Particulas[i]);
+        CalculeF_pared(Particulas[i],Particulas[N]);
     };
     //Calcular Fuerza entre colisiones de las partículas
     for(i=0;i<N;i++){
         for(j=i+1;j<N;j++){
             CalculeF_colision(Particulas[i],Particulas[j], xCundall[i][j], sold[i][j], dt);
         } 
-    }
-    //Calcular Fuerza entre cada partícula y la pared
-    for(i=0;i<N;i++){
-        CalculeF_pared(Particulas[i],Particulas[N]);
     }
 }
 
@@ -232,7 +232,9 @@ void Colisionador::CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, do
         //tau1 = ((n * R1) ^ F1); //TODO: agregar cuando se implemente la rotación
 
         Particula2.SumeFuerza(F2); Particula1.SumeFuerza(F1);
-    };
+    }
+    if(sold>=0 && s<0){xCundall=0;}  
+    sold=s;
 }
 
 void Colisionador::CalculeF_pared(Cuerpo & Particula,Cuerpo & pared){
@@ -252,14 +254,19 @@ void Colisionador::CalculeF_magnus(Cuerpo & Particula){
     vector3D Fm = -0.5 * Cd * rho * Particula.A * Particula.R * (Particula.w ^ Particula.V); // Fuerza de Magnus
     Particula.SumeFuerza(Fm); 
 }
+
+void Colisionador::CalculeF_ceentral(Cuerpo & Particula){
+    vector3D Fc = -K * Particula.r; // Fuerza central
+    Particula.SumeFuerza(Fc); 
+}
 //--------------------------
 void InicieAnimacion(const std::string& str) 
 {
     cout << "set terminal gif animate" << endl;
     cout << "set output '"<< str <<"'" << endl;
     cout << "unset key" << endl;
-    cout<<"set xrange["<<-Lx-10<<":"<<Lx+10<<"]"<<endl;
-    cout<<"set yrange["<<-Ly-10<<":"<<Ly+10<<"]"<<endl;
+    cout<<"set xrange["<<-Lx-2<<":"<<Lx+2<<"]"<<endl;
+    cout<<"set yrange["<<-Ly-2<<":"<<Ly+2<<"]"<<endl;
     cout<<"set size ratio -1"<<endl;
     cout<<"set parametric"<<endl;
     cout<<"set trange [0:7]"<<endl;
@@ -267,7 +274,7 @@ void InicieAnimacion(const std::string& str)
 }
 void InicieCuadro(void){
     cout<<"plot 0,0 ";
-    cout<<" , "<<1e-6<<"+"<<50<<"*cos(t),"<<1e-6<<"+"<<50<<"*sin(t)"; //Pared Circular
+    cout<<" , "<<1e-6<<"+"<<10<<"*cos(t),"<<1e-6<<"+"<<10<<"*sin(t)"; //Pared Circular
 }
 void TermineCuadro(void){
     cout<<endl;
