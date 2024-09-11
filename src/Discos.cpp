@@ -24,7 +24,7 @@ const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
 const double KH=1e4; //Constante de Hertz
 const double Kcundall = 500; //Constante de Cundall
-const double mu = 0.1 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.4 por ahora
+const double mu = 0.1 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.1 por ahora
 const double K = 1.0; // Constante de resorte
 const double GammaHertz = 50; // Constante de amortiguamiento de Hertz
 
@@ -38,13 +38,21 @@ class Colisionador;
 class Cuerpo{
     private:
      vector3D r, V, w, F;   //Vectores posición, velocidad, velocidad ángular y fuerza
-     double m, R; // Masa, radio y velocidad ángular
-     double A; // Longitud característica del disco
+     double m, R, theta, omega; // Masa, radio y velocidad ángular
+     double A, I, tau; // Longitud característica del disco
 
     public:
         void Inicie(double x0, double y0, double vx0, double vy0, double omega0, double m0, double R0);
-        void BorreFuerza(void){F.load(0,0,0);};
-        void SumeFuerza(vector3D dF){F+=dF;};
+        void BorreFuerza(void)
+        {
+            F.load(0,0,0);
+            tau = 0;
+        };
+        void SumeFuerza(vector3D dF, double dtau)
+        {
+            F+=dF;
+            tau += dtau;
+        };
         void Muevase(double dt, double kT, Crandom & ran64);
         void Arranque(double dt);
         double Get_x(void){return r.x();};
@@ -137,24 +145,31 @@ int main(int argc, char *argv[]){
 
 void Cuerpo::Inicie(double x0, double y0, double vx0, double vy0, double omega0, double m0, double R0){
     // inicializa vectores posición y velocidad
-    r.load(x0, y0, 0.0); V.load(vx0, vy0, 0.0); w.load(0, 0, omega0);
+    r.load(x0, y0, 0.0); V.load(vx0, vy0, 0.0); 
     // inicializa variables
-    m=m0; R=R0;
+    m=m0; R=R0; 
+    theta=0; omega = omega0;
     A = 2*R;
+    I = 0.5 * m * R * R; 
 }
 
 void Cuerpo::Muevase(double dt, double kT, Crandom & ran64){
     //Algotimo Browniano leap-frog estocástico 
-    vector3D Vprime=V+F*dt;
+    vector3D Vprime=V+F*dt/m; //? antes no se devidia por la masa, en clase aparecia asi, aun asi busque y en varias partes se divide por la masa como en el LF tradicional
     vector3D epsilon; epsilon.load(ran64.gauss(0,1), ran64.gauss(0,1), 0); //Variable aleatoria
     vector3D deltaV= -alpha*Vprime+sqrt(alpha*(2-alpha)*kT/m)*epsilon;
     r+=(Vprime+deltaV*0.5)*dt; 
     V=Vprime+deltaV;
+
+    //Algortimo leap-frog para rotación "determinista"
+    omega += tau*dt/I;
+    theta += omega*dt;
 }
 
 void Cuerpo::Arranque(double dt){
     //Algotimo leap-frog
     V-=F*(dt/(2*m));
+    omega -= tau*(dt/(2*I));
 }
 
 void Cuerpo::Dibujese(void){
@@ -209,8 +224,8 @@ void Colisionador::CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, do
 
         // calculo de velocidades de contacto
         vector3D Rw;
-        //Rw.load(0, 0, R2 * Particula2.omega + R1 * Particula1.omega); //TODO: Agregar esto cuando se implemente la rotación
-        vector3D Vc = (Particula2.V - Particula1.V); //TODO: Agregar  - (Rw ^ n)
+        Rw.load(0, 0, R2 * Particula2.omega + R1 * Particula1.omega);
+        vector3D Vc = (Particula2.V - Particula1.V) - (Rw ^ n);
         double Vcn = Vc * n, Vct = Vc * t;
 
         //Calcular fuerza Herzt
@@ -230,11 +245,12 @@ void Colisionador::CalculeF_colision(Cuerpo & Particula1,Cuerpo & Particula2, do
         // calcular y cargar fuerzas
         vector3D F1, F2, tau1, tau2;
         F2 = n * Fn + t * Ft; 
-        //tau2 = ((n * (-R2)) ^ F2); //TODO: agregar cuando se implemente la rotación
+        tau2 = ((n * (-R2)) ^ F2); 
         F1 = F2 * -1;
-        //tau1 = ((n * R1) ^ F1); //TODO: agregar cuando se implemente la rotación
+        tau1 = ((n * R1) ^ F1);
 
-        Particula2.SumeFuerza(F2); Particula1.SumeFuerza(F1);
+        Particula2.SumeFuerza(F2, tau2 * k); 
+        Particula1.SumeFuerza(F1, tau1 * k);
     }
     if(sold>=0 && s<0){xCundall=0;}  
     sold=s;
@@ -253,8 +269,8 @@ void Colisionador::CalculeF_pared(Cuerpo & Particula,Cuerpo & pared, double &xCu
 
         // calculo de velocidades de contacto
         vector3D Rw;
-        //Rw.load(0, 0, R2 * Particula2.omega + R1 * Particula1.omega); //TODO: Agregar esto cuando se implemente la rotación
-        vector3D Vc = (pared.V - Particula.V); //TODO: Agregar  - (Rw ^ n)
+        Rw.load(0, 0, R * Particula.omega);
+        vector3D Vc = (pared.V - Particula.V) - (Rw ^ n);
         double Vcn = Vc * n, Vct = Vc * t;
 
         //Calcular fuerza Herzt
@@ -272,23 +288,26 @@ void Colisionador::CalculeF_pared(Cuerpo & Particula,Cuerpo & pared, double &xCu
         }
 
         // calcular y cargar fuerzas
-        vector3D F1, F2, tau1, tau2;
+        vector3D F1, F2, tau;
         F2 = n * Fn + t * Ft; 
-        //tau2 = ((n * (-R2)) ^ F2); //TODO: agregar cuando se implemente la rotación
         F1 = F2 * -1;
-        //tau1 = ((n * R1) ^ F1); //TODO: agregar cuando se implemente la rotación
+        tau = ((n * R) ^ F1);
 
-        Particula.SumeFuerza(F1);
+        Particula.SumeFuerza(F1, tau * k);
     }
 }
-void Colisionador::CalculeF_magnus(Cuerpo & Particula){
-    vector3D Fm = -0.5 * Cd * rho * Particula.A * Particula.R * (Particula.w ^ Particula.V); // Fuerza de Magnus
-    Particula.SumeFuerza(Fm); 
+void Colisionador::CalculeF_magnus(Cuerpo & Particula)
+{
+    vector3D w;
+    w.load(0,0,Particula.omega); //* para el resto de calculos es más conveniente trabajar con omega
+    vector3D Fm = -0.5 * Cd * rho * Particula.A * Particula.R * (w ^ Particula.V); // Fuerza de Magnus
+    Particula.SumeFuerza(Fm, 0); 
 }
 
-void Colisionador::CalculeF_ceentral(Cuerpo & Particula){
+void Colisionador::CalculeF_ceentral(Cuerpo & Particula)
+{
     vector3D Fc = -K * Particula.r; // Fuerza central
-    Particula.SumeFuerza(Fc); 
+    Particula.SumeFuerza(Fc, 0); 
 }
 //--------------------------
 void InicieAnimacion(const std::string& str) 
