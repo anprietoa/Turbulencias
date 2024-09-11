@@ -11,23 +11,23 @@ const double dt = 6e-4;
 const double tf = 100;
 
 // Constantes Globales
-const double Gamma = 16.0;
+const double Gamma = 10.0;
 const double alpha = 1 - exp(-Gamma * dt);
 
 const int Nx=5, Ny=5; //Número de Particulas (cuadrícula)
 const int N=Nx*Ny;
 const double Lx=Nx*3,Ly=Ny*3, dx=Lx/Nx, dy=Ly/Ny;
 
-// Constantes para fuerzas
+// Constantes del sistema
+const double KT = 4.0; // "temperatura"
 const double Cd = 0.47; // Coeficiente de arrastre (esfera)
 const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
 const double KH=1e4; //Constante de Hertz
 const double Kcundall = 500; //Constante de Cundall
-const double mu = 0.1 ; // Coeficiente de fricción //TODO: Revisar valor, lo dejo como 0.1 por ahora
+const double mu = 0.4 ; // Coeficiente de fricción de disco-disco //TODO: Revisar valor, lo dejo como 0.4 por ahora
 const double K = 1.0; // Constante de resorte
 const double GammaHertz = 50; // Constante de amortiguamiento de Hertz
-
 //* ------------------------------ Declaraion de clases, metodos de clases y funciones globales ------------------------------
 
 //Declarar clases----------------
@@ -61,6 +61,7 @@ class Cuerpo{
         double Get_Vx(void){return V.x();};
         double Get_Vy(void){return V.y();};
         double Get_Vz(void){return V.z();};
+        double Get_omega(void){return omega;};
         void Dibujese(void);
         friend class Colisionador;           
 };
@@ -76,6 +77,7 @@ class Colisionador{
         void CalculeF_pared(Cuerpo & Particula1,Cuerpo & pared, double &xCundall, double &sold, double dt);
         void CalculeF_magnus(Cuerpo & Particula);
         void CalculeF_ceentral(Cuerpo & Particula);
+        void CalculeT_ind(Cuerpo & Particula);
 };
 
 // Declaracion de funciones globales
@@ -98,10 +100,9 @@ int main(int argc, char *argv[]){
     int gnu = stringToBool(input);
 
     //Constantes iniciales
-    double KT = 4.0;
     double m0 = 1.0;
     double R0 = 1.0;
-    double omega0 = -100.0;
+    double omega0 = 0.0;
 
     //Variable auxiliares para la animación
     int i, Ncuadros=500; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
@@ -173,7 +174,8 @@ void Cuerpo::Arranque(double dt){
 }
 
 void Cuerpo::Dibujese(void){
-    cout<<" , "<<r.x()<<"+"<<R<<"*cos(t),"<<r.y()<<"+"<<R<<"*sin(t)";
+    cout<<" , "<<r.x()<<"+"<<R<<"*cos(t),"<<r.y()<<"+"<<R<<"*sin(t) , "
+    <<r.x()<<"+"<<R*cos(theta)/7.0<<"*t,"<<r.y()<<"+"<<R*sin(theta)/7.0<<"*t";
 }
 
 //----------  Implementar funciones de la clase Colisionador  --------------
@@ -200,6 +202,7 @@ void Colisionador::CalculeAllF(Cuerpo*Particulas){
         CalculeF_magnus(Particulas[i]);
         CalculeF_ceentral(Particulas[i]);
         CalculeF_pared(Particulas[i],Particulas[N], xCundall[i][N], sold[i][N], dt);
+        CalculeT_ind(Particulas[i]);
     };
     //Calcular Fuerza entre colisiones de las partículas
     for(i=0;i<N;i++){
@@ -309,6 +312,22 @@ void Colisionador::CalculeF_ceentral(Cuerpo & Particula)
     vector3D Fc = -K * Particula.r; // Fuerza central
     Particula.SumeFuerza(Fc, 0); 
 }
+
+void Colisionador::CalculeT_ind(Cuerpo & Particula)
+{
+    vector3D T, Tv, Tfric, k, F_zero;
+    F_zero.load(0, 0, 0);
+    double tau0 = -KT * Particula.R * 10;
+
+    //Torque por vemtilador
+    Tv.load(0, 0, tau0);
+    //Torque de fricción
+    k.load(0, 0, 1);
+    Tfric.load(0, 0, -Gamma * Particula.omega);
+
+    T = Tv + Tfric;
+    Particula.SumeFuerza(F_zero, T * k);
+}
 //--------------------------
 void InicieAnimacion(const std::string& str) 
 {
@@ -360,7 +379,8 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
         case 0:
             for (int i = 0; i < N; i++) 
             {
-                cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << endl;
+                cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << Polen[i].Get_omega() << endl;
             }
             break;
         case 1:
@@ -378,7 +398,8 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
             std::ofstream MyFile("mdisc.dat", std::ios::app);
             for (int i = 0; i < N; i++) 
             {
-                MyFile << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << endl;
+                MyFile << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << Polen[i].Get_omega() << endl;
             }
             MyFile.close();
             break;
