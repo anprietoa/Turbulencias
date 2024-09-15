@@ -7,25 +7,25 @@ using namespace std;
 
 //* ------------------------------ Constantes globales ------------------------------
 // Constantes Temporales
-const double dt = 6e-4;
-const double tf = 100;
+const double dt = 5e-6;
+const double tf = 5;
 
 // Constantes Globales
-const double Gamma = 10.0;
+const double Gamma = 16.0;
 const double alpha = 1 - exp(-Gamma * dt);
 
-const int Nx=5, Ny=5; //Número de Particulas (cuadrícula)
+const int Nx=9, Ny=5; //Número de Particulas (cuadrícula)
 const int N=Nx*Ny;
-const double Lx=Nx*3,Ly=Ny*3, dx=Lx/Nx, dy=Ly/Ny;
+const double Lx=7.25*0.8,Ly=7.25*0.8, dx=Lx/Nx, dy=Ly/Ny;
 
 // Constantes del sistema
-const double KT = 4.0; // "temperatura"
+const double KT = 2.0; // "temperatura"
 const double Cd = 0.47; // Coeficiente de arrastre (esfera)
 const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
 const double KH=1e4; //Constante de Hertz
 const double Kcundall = 500; //Constante de Cundall
-const double mu = 0.4 ; // Coeficiente de fricción de disco-disco //TODO: Revisar valor, lo dejo como 0.4 por ahora
+const double mu = 0.1 ; // Coeficiente de fricción de disco-disco //TODO: Revisar valor, lo dejo como 0.4 por ahora
 const double K = 1.0; // Constante de resorte
 const double GammaHertz = 50; // Constante de amortiguamiento de Hertz
 //* ------------------------------ Declaraion de clases, metodos de clases y funciones globales ------------------------------
@@ -100,12 +100,12 @@ int main(int argc, char *argv[]){
     int gnu = stringToBool(input);
 
     //Constantes iniciales
-    double m0 = 1.0;
-    double R0 = 1.0;
-    double omega0 = 0.0;
+    double m0 = 7.63e-2;
+    double R0 = 7.25e-1;
+    double omega0 = -0.1;
 
     //Variable auxiliares para la animación
-    int i, Ncuadros=500; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
+    int i, Ncuadros=100; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
 
     //Iniciar pared
     Cuerpo Particula[N+1];
@@ -116,9 +116,9 @@ int main(int argc, char *argv[]){
     //Iniciar los cuerpos
     double theta, x0, y0;
     for(int iy=0;iy<Ny;iy++){
-        for(int ix=0;ix<Nx;ix++){
-            theta=2*M_PI*ran64.r();
-            x0=(ix-2)*dx; y0=(iy-2)*dy; 
+        for(int ix=0;ix<Nx;ix++)
+        {
+            x0=2*Nx*R0/(Nx-1)*ix-Nx*R0; y0=2*Ny*R0/(Ny-1)*ix-Ny*R0; 
             //------------------------(x0, y0, Vx0, Vy0,  w0,  m0, R0)
             Particula[iy*Nx+ix].Inicie(x0, y0, 0.0, 0.0, omega0, m0, R0);
 
@@ -163,8 +163,16 @@ void Cuerpo::Muevase(double dt, double kT, Crandom & ran64){
     V=Vprime+deltaV;
 
     //Algortimo leap-frog para rotación "determinista"
+    double Omprime = omega + tau * dt / I;
+    double epsilon2 = ran64.gauss(0,1);
+    double deltaOm = -alpha * omega + sqrt(alpha * (2 - alpha) * kT / I) * epsilon2;
+    deltaOm = 0.25 * deltaOm;
+    theta += (Omprime + deltaOm * 0.5) * dt;
+    omega = Omprime + deltaOm;
+    /*
     omega += tau*dt/I;
     theta += omega*dt;
+    */
 }
 
 void Cuerpo::Arranque(double dt){
@@ -194,7 +202,7 @@ void Colisionador::Inicie(void)
 void Colisionador::CalculeAllF(Cuerpo*Particulas){
     int i,j;
     //Borrar la fuerza de todas los Particulas
-    for(i=0;i<N;i++){
+    for(i=0;i<N+1;i++){
         Particulas[i].BorreFuerza();
     };
     //Calcular fuerza de magus, fuerza central y fuerza contra la pared para cada partícula
@@ -380,7 +388,7 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
             for (int i = 0; i < N; i++) 
             {
                 cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
-                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << Polen[i].Get_omega() << endl;
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega() << endl;
             }
             break;
         case 1:
@@ -399,7 +407,7 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
             for (int i = 0; i < N; i++) 
             {
                 MyFile << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
-                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << Polen[i].Get_omega() << endl;
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega() << endl;
             }
             MyFile.close();
             break;
