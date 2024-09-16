@@ -8,18 +8,18 @@ using namespace std;
 //* ------------------------------ Constantes globales ------------------------------
 // Constantes Temporales
 const double dt = 5e-6;
-const double tf = 5;
+const double tf = 50;
 
 // Constantes Globales
 const double Gamma = 16.0;
 const double alpha = 1 - exp(-Gamma * dt);
 
-const int Nx=9, Ny=5; //Número de Particulas (cuadrícula)
+const int Nx=5, Ny=5; //Número de Particulas (cuadrícula)
 const int N=Nx*Ny;
 const double Lx=7.25*0.8,Ly=7.25*0.8, dx=Lx/Nx, dy=Ly/Ny;
 
 // Constantes del sistema
-const double KT = 2.0; // "temperatura"
+const double KT = 6.0e-3; // "temperatura"
 const double Cd = 0.47; // Coeficiente de arrastre (esfera)
 const double rho = 1.225; // Densidad del aire (kg/m^3)
 const double S = 1.0; // Constante de Magnus
@@ -37,7 +37,7 @@ class Colisionador;
 //----------------Declaraion de la clase Cuerpo--------------
 class Cuerpo{
     private:
-     vector3D r, V, w, F;   //Vectores posición, velocidad, velocidad ángular y fuerza
+     vector3D r, V, F;   //Vectores posición, velocidad, velocidad ángular y fuerza
      double m, R, theta, omega; // Masa, radio y velocidad ángular
      double A, I, tau; // Longitud característica del disco
 
@@ -62,6 +62,7 @@ class Cuerpo{
         double Get_Vy(void){return V.y();};
         double Get_Vz(void){return V.z();};
         double Get_omega(void){return omega;};
+        double Get_theta(void){return theta;};  
         void Dibujese(void);
         friend class Colisionador;           
 };
@@ -100,12 +101,12 @@ int main(int argc, char *argv[]){
     int gnu = stringToBool(input);
 
     //Constantes iniciales
-    double m0 = 7.63e-2;
-    double R0 = 7.25e-1;
-    double omega0 = -0.1;
+    double m0 = 7.63e-3;
+    double R0 = 7.25e-2;
+    double omega0 = -0.001;
 
     //Variable auxiliares para la animación
-    int i, Ncuadros=100; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
+    int i, Ncuadros=500; double t,tdibujo=0,tcuadro=tf/Ncuadros; 
 
     //Iniciar pared
     Cuerpo Particula[N+1];
@@ -118,7 +119,7 @@ int main(int argc, char *argv[]){
     for(int iy=0;iy<Ny;iy++){
         for(int ix=0;ix<Nx;ix++)
         {
-            x0=2*Nx*R0/(Nx-1)*ix-Nx*R0; y0=2*Ny*R0/(Ny-1)*ix-Ny*R0; 
+            x0=2*Nx*R0/(Nx-1)*ix-Nx*R0; y0=2*Ny*R0/(Ny-1)*iy-Ny*R0; 
             //------------------------(x0, y0, Vx0, Vy0,  w0,  m0, R0)
             Particula[iy*Nx+ix].Inicie(x0, y0, 0.0, 0.0, omega0, m0, R0);
 
@@ -151,7 +152,8 @@ void Cuerpo::Inicie(double x0, double y0, double vx0, double vy0, double omega0,
     m=m0; R=R0; 
     theta=0; omega = omega0;
     A = 2*R;
-    I = 0.5 * m * R * R; 
+    //I = m*R*R*0.5;
+    I = m*R*R/8; 
 }
 
 void Cuerpo::Muevase(double dt, double kT, Crandom & ran64){
@@ -165,8 +167,8 @@ void Cuerpo::Muevase(double dt, double kT, Crandom & ran64){
     //Algortimo leap-frog para rotación "determinista"
     double Omprime = omega + tau * dt / I;
     double epsilon2 = ran64.gauss(0,1);
-    double deltaOm = -alpha * omega + sqrt(alpha * (2 - alpha) * kT / I) * epsilon2;
-    deltaOm = 0.25 * deltaOm;
+    double deltaOm = -alpha * Omprime + sqrt(alpha * (2 - alpha) * kT / I) * epsilon2;
+    deltaOm = 0.5 * deltaOm;
     theta += (Omprime + deltaOm * 0.5) * dt;
     omega = Omprime + deltaOm;
     /*
@@ -325,13 +327,13 @@ void Colisionador::CalculeT_ind(Cuerpo & Particula)
 {
     vector3D T, Tv, Tfric, k, F_zero;
     F_zero.load(0, 0, 0);
-    double tau0 = -KT * Particula.R * 10;
 
     //Torque por vemtilador
-    Tv.load(0, 0, tau0);
+    Tv.load(0, 0, -pow(KT,0.5) * Particula.R * 10);
     //Torque de fricción
     k.load(0, 0, 1);
-    Tfric.load(0, 0, -Gamma * Particula.omega);
+    //Tfric.load(0, 0, -Gamma * Particula.omega);
+    Tfric.load(0, 0, -Gamma/2000 * Particula.omega/pow(abs(Particula.omega),0.5));
 
     T = Tv + Tfric;
     Particula.SumeFuerza(F_zero, T * k);
@@ -342,8 +344,8 @@ void InicieAnimacion(const std::string& str)
     cout << "set terminal gif animate" << endl;
     cout << "set output '"<< str <<"'" << endl;
     cout << "unset key" << endl;
-    cout<<"set xrange["<<-Lx-2<<":"<<Lx+2<<"]"<<endl;
-    cout<<"set yrange["<<-Ly-2<<":"<<Ly+2<<"]"<<endl;
+    cout<<"set xrange["<<-0.75<<":"<<0.75<<"]"<<endl;
+    cout<<"set yrange["<<-0.75<<":"<<0.75<<"]"<<endl;
     cout<<"set size ratio -1"<<endl;
     cout<<"set parametric"<<endl;
     cout<<"set trange [0:7]"<<endl;
@@ -351,7 +353,7 @@ void InicieAnimacion(const std::string& str)
 }
 void InicieCuadro(void){
     cout<<"plot 0,0 ";
-    cout<<" , "<<1e-6<<"+"<<10<<"*cos(t),"<<1e-6<<"+"<<10<<"*sin(t)"; //Pared Circular
+    cout<<" , "<<1e-6<<"+"<<0.725<<"*cos(t),"<<1e-6<<"+"<<0.725<<"*sin(t)"; //Pared Circular
 }
 void TermineCuadro(void){
     cout<<endl;
@@ -388,7 +390,8 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
             for (int i = 0; i < N; i++) 
             {
                 cout << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
-                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega() << endl;
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega() 
+                << " " << Polen[i].Get_theta() << endl;
             }
             break;
         case 1:
@@ -407,7 +410,8 @@ void Imprimase(double t, Cuerpo *Polen, int gnuplot)
             for (int i = 0; i < N; i++) 
             {
                 MyFile << t << " " << i << " " << Polen[i].Get_x() << " " << Polen[i].Get_y() << " " 
-                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega() << endl;
+                << Polen[i].Get_Vx() << " " << Polen[i].Get_Vy() << " " << Polen[i].Get_omega()
+                << " " << Polen[i].Get_theta() << endl;
             }
             MyFile.close();
             break;
